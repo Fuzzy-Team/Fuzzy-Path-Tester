@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QF
 from PySide6.QtCore import Qt
 from ..backend.runner import Runner
 from .timeline import TimelineWidget
+from PySide6.QtWidgets import QCheckBox, QMessageBox
 
 
 class MainWindow(QMainWindow):
@@ -89,6 +90,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel('Scheduled Vic Triggers'))
         layout.addWidget(self.vic_list)
 
+        # Live mode and safety controls
+        live_row = QHBoxLayout()
+        self.chk_live = QCheckBox('Enable Live Mode (send real keys)')
+        live_row.addWidget(self.chk_live)
+        self.btn_emergency = QPushButton('EMERGENCY STOP')
+        self.btn_emergency.setEnabled(False)
+        self.btn_emergency.clicked.connect(self.on_emergency_stop)
+        live_row.addWidget(self.btn_emergency)
+        layout.addLayout(live_row)
+
         w.setLayout(layout)
         self.setCentralWidget(w)
 
@@ -103,9 +114,9 @@ class MainWindow(QMainWindow):
             files = dlg.selectedFiles()
             if files:
                 sel = Path(files[0]).resolve()
-                # only accept files inside patterns_dir
+                # allow any file under patterns_dir (including subfolders)
                 try:
-                    if patterns_dir.exists() and patterns_dir in sel.parents:
+                    if patterns_dir.exists() and str(sel).startswith(str(patterns_dir)):
                         self.path = str(sel)
                         self.file_label.setText(self.path)
                     else:
@@ -121,15 +132,29 @@ class MainWindow(QMainWindow):
                 return
             size = self.size_combo.currentText()
             width = self.width_spin.value()
-            self.log.append(f'Running {path} size={size} width={width} (background)')
+            live_mode = bool(self.chk_live.isChecked())
+            if live_mode:
+                # confirm live mode
+                mb = QMessageBox(self)
+                mb.setIcon(QMessageBox.Warning)
+                mb.setWindowTitle('Enable Live Mode')
+                mb.setText('Live mode will send real key events to your system. Ensure the game is focused and you have Accessibility permission on macOS. Proceed?')
+                mb.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+                resp = mb.exec()
+                if resp != QMessageBox.Ok:
+                    self.log.append('Live mode not confirmed; aborting run')
+                    return
+            self.log.append(f'Running {path} size={size} width={width} (background){" [LIVE]" if live_mode else ""}')
             # disable run while running
             self.btn_run.setEnabled(False)
             self.btn_pause.setEnabled(True)
             self.btn_vic.setEnabled(True)
             self.btn_step.setEnabled(True)
             self.btn_schedule.setEnabled(True)
+            # enable emergency stop if live
+            self.btn_emergency.setEnabled(live_mode)
             # start background run and provide callback for completion
-            self.runner.run_threaded(path, sizeword=size, width=width, movespeed=18, time_scale=0.05, callback=self._on_run_finished)
+            self.runner.run_threaded(path, sizeword=size, width=width, movespeed=18, time_scale=0.05, callback=self._on_run_finished, live_mode=live_mode)
         except Exception as e:
             self.log.append('Error: ' + str(e))
 
@@ -222,3 +247,22 @@ class MainWindow(QMainWindow):
             self.log.append(f'Scheduled Vic in {secs:.2f}s')
         except Exception as e:
             self.log.append('Schedule Vic failed: ' + str(e))
+
+    def on_emergency_stop(self):
+        try:
+            rr = self.runner.get_last_result()
+            if rr and rr.selfstub:
+                try:
+                    rr.selfstub.keyboard.emergency_stop()
+                except Exception:
+                    pass
+            # also call runner.stop to set internal stop flag
+            try:
+                self.runner.stop()
+            except Exception:
+                pass
+            self.log.append('Emergency stop issued')
+            # disable emergency button until next run
+            self.btn_emergency.setEnabled(False)
+        except Exception as e:
+            self.log.append('Emergency stop failed: ' + str(e))

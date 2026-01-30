@@ -63,6 +63,14 @@ class KeyboardStub:
         self.events = events
         self.time = time_controller
         self.live = live
+        self._pressed = set()
+        self._controller = None
+        if self.live:
+            try:
+                from pynput.keyboard import Controller
+                self._controller = Controller()
+            except Exception:
+                self._controller = None
 
     def _record(self, typ, keys, start, end=None, meta=None):
         e = Event(type=typ, keys=keys, start=start, end=end, meta=meta or {})
@@ -71,20 +79,73 @@ class KeyboardStub:
     def walk(self, key: str, duration: float):
         start = time.time()
         self._record('walk_start', key, start, meta={'duration': duration})
+        # if live controller available, press key down, sleep, then release
+        if self.live and self._controller is not None:
+            try:
+                k = _map_key_for_pynput(key)
+                self._controller.press(k)
+                self._pressed.add(k)
+            except Exception:
+                pass
         self.time.sleep(duration)
+        if self.live and self._controller is not None:
+            try:
+                k = _map_key_for_pynput(key)
+                self._controller.release(k)
+                if k in self._pressed:
+                    self._pressed.remove(k)
+            except Exception:
+                pass
         end = time.time()
         self._record('walk_end', key, start, end, meta={'duration': duration})
 
     def multiWalk(self, keys: List[str], duration: float):
         start = time.time()
         self._record('multiwalk_start', keys, start, meta={'duration': duration})
+        mapped = []
+        if self.live and self._controller is not None:
+            try:
+                for key in keys:
+                    k = _map_key_for_pynput(key)
+                    self._controller.press(k)
+                    mapped.append(k)
+                    self._pressed.add(k)
+            except Exception:
+                mapped = []
         self.time.sleep(duration)
+        if self.live and self._controller is not None:
+            try:
+                for k in mapped:
+                    self._controller.release(k)
+                    if k in self._pressed:
+                        self._pressed.remove(k)
+            except Exception:
+                pass
         end = time.time()
         self._record('multiwalk_end', keys, start, end, meta={'duration': duration})
 
     def press(self, key: str):
         start = time.time()
+        if self.live and self._controller is not None:
+            try:
+                k = _map_key_for_pynput(key)
+                self._controller.press(k)
+                self._controller.release(k)
+            except Exception:
+                pass
         self._record('press', key, start, start, meta={})
+
+    def emergency_stop(self):
+        if self._controller is not None and self._pressed:
+            try:
+                for k in list(self._pressed):
+                    try:
+                        self._controller.release(k)
+                    except Exception:
+                        pass
+                self._pressed.clear()
+            except Exception:
+                pass
 
 
 class VicDetector:
@@ -111,11 +172,11 @@ class VicDetector:
 
 
 class SelfStub:
-    def __init__(self, time_controller: TimeController, movespeed=18, location='unknown'):
+    def __init__(self, time_controller: TimeController, movespeed=18, location='unknown', live=False):
         self.time = time_controller
         self.setdat = {'movespeed': movespeed}
         self.keyboard_events: List[Event] = []
-        self.keyboard = KeyboardStub(self.keyboard_events, time_controller)
+        self.keyboard = KeyboardStub(self.keyboard_events, time_controller, live=live)
         self.location = location
         self.night = False
         self._print_log: List[str] = []
@@ -154,3 +215,24 @@ def make_vic_search_walk(selfstub: SelfStub, vicdetector: VicDetector):
         end = time.time()
         selfstub.keyboard._record('vic_walk_end', key, start, end, meta={'duration': duration})
     return vicSearchWalk
+
+
+def _map_key_for_pynput(key: str):
+    try:
+        from pynput.keyboard import Key
+        k = key.lower()
+        if k in (',', '.'):
+            return key
+        if k == 'pageup' or k == 'page_up':
+            return Key.page_up
+        if k == 'pagedown' or k == 'page_down':
+            return Key.page_down
+        if k == 'space':
+            return Key.space
+        if len(key) == 1:
+            return key
+        if hasattr(Key, k):
+            return getattr(Key, k)
+    except Exception:
+        pass
+    return key

@@ -5,10 +5,10 @@ from pathlib import Path
 from .stubs import make_sleep, make_vic_search_walk, SelfStub, TimeController, VicDetector
 
 
-def prepare_namespace(script_path: str, sizeword: str, width: int, movespeed: int, time_scale: float = 1.0):
+def prepare_namespace(script_path: str, sizeword: str, width: int, movespeed: int, time_scale: float = 1.0, live_mode: bool = False):
     tc = TimeController(scale=time_scale)
     vic = VicDetector()
-    selfstub = SelfStub(tc, movespeed=movespeed)
+    selfstub = SelfStub(tc, movespeed=movespeed, live=live_mode)
 
     # size conversion
     size_map = {

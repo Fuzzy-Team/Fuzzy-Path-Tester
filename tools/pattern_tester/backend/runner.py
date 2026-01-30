@@ -27,24 +27,24 @@ class Runner:
         self._pause.set()
         self._current_run = None
 
-    def load_and_run(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0):
-        ns, selfstub, vic, tc = prepare_namespace(script_path, sizeword, width, movespeed, time_scale)
+    def load_and_run(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, live_mode: bool = False):
+        ns, selfstub, vic, tc = prepare_namespace(script_path, sizeword, width, movespeed, time_scale, live_mode=live_mode)
         exc = safe_execute(script_path, ns)
         if exc:
             return RunResult(False, exc, selfstub, vic=vic, time_controller=tc)
         return RunResult(True, None, selfstub, vic=vic, time_controller=tc)
 
     # blocking run (keeps previous behavior)
-    def run_blocking(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0):
-        return self.load_and_run(script_path, sizeword, width, movespeed, time_scale)
+    def run_blocking(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, live_mode: bool = False):
+        return self.load_and_run(script_path, sizeword, width, movespeed, time_scale, live_mode=live_mode)
 
-    def run_threaded(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, callback=None):
+    def run_threaded(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, callback=None, live_mode: bool = False):
         """Run the script in a background thread. If provided, call `callback(result)` when finished."""
         if self._thread and self._thread.is_alive():
             raise RuntimeError('Runner is already running')
 
         def _target():
-            result = self.load_and_run(script_path, sizeword, width, movespeed, time_scale)
+            result = self.load_and_run(script_path, sizeword, width, movespeed, time_scale, live_mode=live_mode)
             self._current_run = result
             if callback:
                 try:
