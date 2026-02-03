@@ -3,11 +3,13 @@
 If PySide6 isn't installed, `tools.pattern_tester.main` will print an informative message.
 """
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QFileDialog, QTextEdit, QLabel, QComboBox, QSpinBox, QHBoxLayout, QDoubleSpinBox, QListWidget
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QFileDialog, QTextEdit, QLabel, QComboBox, QSpinBox, QHBoxLayout, QDoubleSpinBox, QListWidget, QTabWidget, QAbstractItemView
+from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QKeySequence
 from ..backend.runner import Runner
 from .timeline import TimelineWidget
 from PySide6.QtWidgets import QCheckBox, QMessageBox
+import time
 
 
 class MainWindow(QMainWindow):
@@ -15,11 +17,44 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Fuzzy Pattern Tester')
         self.runner = Runner()
+        self.is_recording = False
+        self._record_starts = {}
+        self.recorded_events = []
         self._build_ui()
+        self.setFocusPolicy(Qt.StrongFocus)
+        # capture key events for recording across child widgets
+        app = self._get_app_instance()
+        if app:
+            app.installEventFilter(self)
 
     def _build_ui(self):
         w = QWidget()
         layout = QVBoxLayout()
+
+        self.tabs = QTabWidget()
+        self.creator_tab = QWidget()
+        self.tester_tab = QWidget()
+        self.tabs.addTab(self.creator_tab, 'Creator')
+        self.tabs.addTab(self.tester_tab, 'Tester')
+
+        self._build_creator_tab(self.creator_tab)
+        self._build_tester_tab(self.tester_tab)
+
+        layout.addWidget(self.tabs)
+        w.setLayout(layout)
+        self.setCentralWidget(w)
+
+    def _build_tester_tab(self, tab_widget: QWidget):
+        layout = QVBoxLayout()
+
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel('Mode'))
+        self.mode_toggle_tester = QPushButton('Pattern')
+        self.mode_toggle_tester.setCheckable(True)
+        self.mode_toggle_tester.toggled.connect(lambda checked: self._on_toggle_mode(self.mode_toggle_tester, checked))
+        mode_row.addWidget(self.mode_toggle_tester)
+        mode_row.addStretch(1)
+        layout.addLayout(mode_row)
 
         # file selector
         file_row = QHBoxLayout()
@@ -100,8 +135,173 @@ class MainWindow(QMainWindow):
         live_row.addWidget(self.btn_emergency)
         layout.addLayout(live_row)
 
-        w.setLayout(layout)
-        self.setCentralWidget(w)
+        tab_widget.setLayout(layout)
+
+    def _build_creator_tab(self, tab_widget: QWidget):
+        layout = QVBoxLayout()
+
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel('Create As'))
+        self.mode_toggle_creator = QPushButton('Pattern')
+        self.mode_toggle_creator.setCheckable(True)
+        self.mode_toggle_creator.toggled.connect(lambda checked: self._on_toggle_mode(self.mode_toggle_creator, checked))
+        mode_row.addWidget(self.mode_toggle_creator)
+        mode_row.addStretch(1)
+        layout.addLayout(mode_row)
+
+        layout.addWidget(QLabel('Block Builder'))
+        blocks_row = QHBoxLayout()
+        self.available_blocks = QListWidget()
+        self.available_blocks.addItems(['Move Up', 'Move Down', 'Move Left', 'Move Right', 'Wait 0.10s'])
+        self.available_blocks.itemDoubleClicked.connect(self._on_add_block_from_available)
+        blocks_row.addWidget(self.available_blocks)
+
+        block_buttons = QVBoxLayout()
+        self.btn_add_block = QPushButton('Add Block →')
+        self.btn_add_block.clicked.connect(self._on_add_block_from_available)
+        block_buttons.addWidget(self.btn_add_block)
+        self.btn_remove_block = QPushButton('Remove Selected')
+        self.btn_remove_block.clicked.connect(self._on_remove_block)
+        block_buttons.addWidget(self.btn_remove_block)
+        block_buttons.addStretch(1)
+        blocks_row.addLayout(block_buttons)
+
+        self.block_sequence = QListWidget()
+        self.block_sequence.setDragDropMode(QAbstractItemView.InternalMove)
+        self.block_sequence.setDefaultDropAction(Qt.MoveAction)
+        blocks_row.addWidget(self.block_sequence)
+        layout.addLayout(blocks_row)
+
+        record_row = QHBoxLayout()
+        self.btn_record = QPushButton('Record Actions')
+        self.btn_record.setCheckable(True)
+        self.btn_record.toggled.connect(self._on_record_toggle)
+        record_row.addWidget(self.btn_record)
+        self.btn_clear_record = QPushButton('Clear Recording')
+        self.btn_clear_record.clicked.connect(self._on_clear_recording)
+        record_row.addWidget(self.btn_clear_record)
+        record_row.addStretch(1)
+        layout.addLayout(record_row)
+
+        self.record_list = QListWidget()
+        self.record_list.setMinimumHeight(120)
+        layout.addWidget(QLabel('Recorded Actions'))
+        layout.addWidget(self.record_list)
+
+        output_row = QHBoxLayout()
+        self.btn_generate_blocks = QPushButton('Generate From Blocks')
+        self.btn_generate_blocks.clicked.connect(self._on_generate_from_blocks)
+        output_row.addWidget(self.btn_generate_blocks)
+        self.btn_generate_record = QPushButton('Generate From Recording')
+        self.btn_generate_record.clicked.connect(self._on_generate_from_recording)
+        output_row.addWidget(self.btn_generate_record)
+        output_row.addStretch(1)
+        layout.addLayout(output_row)
+
+        self.creator_output = QTextEdit()
+        self.creator_output.setReadOnly(True)
+        layout.addWidget(QLabel('Generated Path/Pattern Preview'))
+        layout.addWidget(self.creator_output)
+
+        tab_widget.setLayout(layout)
+
+    def _on_toggle_mode(self, button: QPushButton, checked: bool):
+        button.setText('Path' if checked else 'Pattern')
+
+    def _get_mode_label(self, button: QPushButton) -> str:
+        return button.text()
+
+    def _on_add_block_from_available(self):
+        item = self.available_blocks.currentItem()
+        if item:
+            self.block_sequence.addItem(item.text())
+
+    def _on_remove_block(self):
+        for item in self.block_sequence.selectedItems():
+            row = self.block_sequence.row(item)
+            self.block_sequence.takeItem(row)
+
+    def _on_record_toggle(self, checked: bool):
+        self.is_recording = checked
+        self._record_starts = {}
+        if checked:
+            self.btn_record.setText('Stop Recording')
+            self.record_list.addItem('--- Recording started ---')
+        else:
+            self.btn_record.setText('Record Actions')
+            self.record_list.addItem('--- Recording stopped ---')
+
+    def _on_clear_recording(self):
+        self.record_list.clear()
+        self.recorded_events = []
+        self._record_starts = {}
+
+    def _on_generate_from_blocks(self):
+        mode = self._get_mode_label(self.mode_toggle_creator)
+        steps = [self.block_sequence.item(i).text() for i in range(self.block_sequence.count())]
+        lines = [f'{mode}']
+        if not steps:
+            lines.append('No blocks added.')
+        else:
+            lines.append('Steps:')
+            for step in steps:
+                lines.append(f'- {step}')
+        self.creator_output.setPlainText('\n'.join(lines))
+
+    def _on_generate_from_recording(self):
+        mode = self._get_mode_label(self.mode_toggle_creator)
+        lines = [f'{mode}']
+        if not self.recorded_events:
+            lines.append('No recorded actions.')
+        else:
+            lines.append('Recorded Steps:')
+            for key_name, duration in self.recorded_events:
+                lines.append(f'- {key_name} for {duration:.3f}s')
+        self.creator_output.setPlainText('\n'.join(lines))
+
+    def _get_app_instance(self):
+        from PySide6.QtWidgets import QApplication
+        return QApplication.instance()
+
+    def eventFilter(self, obj, event):
+        if not self.is_recording:
+            return super().eventFilter(obj, event)
+        if event.type() not in (QEvent.KeyPress, QEvent.KeyRelease):
+            return super().eventFilter(obj, event)
+        if event.isAutoRepeat():
+            return super().eventFilter(obj, event)
+
+        key = event.key()
+        if key in (Qt.Key_Shift, Qt.Key_Control, Qt.Key_Alt, Qt.Key_Meta):
+            return super().eventFilter(obj, event)
+
+        # Safely convert modifiers to an int; PySide6 may return an enum/flag object
+        mods = 0
+        try:
+            mods = int(event.modifiers())
+        except Exception:
+            # fallback: try `.value` (some Qt enums expose the underlying value)
+            try:
+                mods = int(event.modifiers().value)
+            except Exception:
+                mods = 0
+
+        key_seq = QKeySequence(mods | int(key)).toString()
+        key_name = key_seq if key_seq else QKeySequence(int(key)).toString()
+        now = time.monotonic()
+
+        if event.type() == QEvent.KeyPress:
+            if key not in self._record_starts:
+                self._record_starts[key] = (now, key_name)
+        else:
+            if key in self._record_starts:
+                start, start_name = self._record_starts.pop(key)
+                duration = max(0.0, now - start)
+                name = start_name or key_name or 'Unknown'
+                self.recorded_events.append((name, duration))
+                self.record_list.addItem(f'{name} for {duration:.3f}s')
+
+        return super().eventFilter(obj, event)
 
     def on_open(self):
         repo_root = Path(__file__).resolve().parents[4]
