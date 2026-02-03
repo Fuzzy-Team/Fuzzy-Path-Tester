@@ -316,11 +316,8 @@ class MainWindow(QMainWindow):
                 sel = Path(files[0]).resolve()
                 # allow any file under patterns_dir (including subfolders)
                 try:
-                    if patterns_dir.exists() and str(sel).startswith(str(patterns_dir)):
-                        self.path = str(sel)
-                        self.file_label.setText(self.path)
-                    else:
-                        self.log.append('Please select a file inside the patterns/ folder')
+                    self.path = str(sel)
+                    self.file_label.setText(self.path)
                 except Exception:
                     self.log.append('Invalid selection')
 
