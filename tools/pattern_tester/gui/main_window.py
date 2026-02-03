@@ -239,25 +239,145 @@ class MainWindow(QMainWindow):
     def _on_generate_from_blocks(self):
         mode = self._get_mode_label(self.mode_toggle_creator)
         steps = [self.block_sequence.item(i).text() for i in range(self.block_sequence.count())]
-        lines = [f'{mode}']
-        if not steps:
-            lines.append('No blocks added.')
+        if mode.lower() == 'path':
+            code_lines = ["# Generated Path", "from time import sleep", ""]
+            if not steps:
+                code_lines.append("# No blocks added")
+            else:
+                for step in steps:
+                    if step.startswith('Move Up'):
+                        code_lines.append('self.keyboard.walk("w", 1.0)')
+                    elif step.startswith('Move Down'):
+                        code_lines.append('self.keyboard.walk("s", 1.0)')
+                    elif step.startswith('Move Left'):
+                        code_lines.append('self.keyboard.walk("a", 1.0)')
+                    elif step.startswith('Move Right'):
+                        code_lines.append('self.keyboard.walk("d", 1.0)')
+                    elif step.startswith('Wait'):
+                        # parse seconds from label like 'Wait 0.10s'
+                        import re
+                        m = re.search(r"([0-9]*\.?[0-9]+)", step)
+                        sec = float(m.group(1)) if m else 0.1
+                        code_lines.append(f'sleep({sec:.3f})')
+                    else:
+                        code_lines.append(f'# Unknown block: {step}')
         else:
-            lines.append('Steps:')
-            for step in steps:
-                lines.append(f'- {step}')
-        self.creator_output.setPlainText('\n'.join(lines))
+            # Pattern template with size handling
+            code_lines = ["# Generated Pattern",
+                          "from time import sleep",
+                          "",
+                          "# Size conversion (auto-generated)",
+                          "if sizeword.lower() == \"xs\":",
+                          "    size = 0.5",
+                          "elif sizeword.lower() == \"s\":",
+                          "    size = 1",
+                          "elif sizeword.lower() == \"l\":",
+                          "    size = 2",
+                          "elif sizeword.lower() == \"xl\":",
+                          "    size = 2.5",
+                          "else:",
+                          "    size = 1.5",
+                          "",
+                          "# Pattern steps (use tcfbkey/tclrkey/afcfbkey/afclrkey variables from macro)"]
+            if not steps:
+                code_lines.append('# No blocks added')
+            else:
+                for step in steps:
+                    if step.startswith('Move Up'):
+                        code_lines.append('self.keyboard.walk(tcfbkey, 0.5 * size)')
+                    elif step.startswith('Move Down'):
+                        code_lines.append('self.keyboard.walk(afcfbkey, 0.5 * size)')
+                    elif step.startswith('Move Left'):
+                        code_lines.append('self.keyboard.walk(tclrkey, 0.17)')
+                    elif step.startswith('Move Right'):
+                        code_lines.append('self.keyboard.walk(afclrkey, 0.17)')
+                    elif step.startswith('Wait'):
+                        import re
+                        m = re.search(r"([0-9]*\.?[0-9]+)", step)
+                        sec = float(m.group(1)) if m else 0.1
+                        code_lines.append(f'sleep({sec:.3f})')
+                    else:
+                        code_lines.append(f'# Unknown block: {step}')
+
+        self.creator_output.setPlainText('\n'.join(code_lines))
 
     def _on_generate_from_recording(self):
         mode = self._get_mode_label(self.mode_toggle_creator)
-        lines = [f'{mode}']
-        if not self.recorded_events:
-            lines.append('No recorded actions.')
+        # helper to normalize recorded key names into macro keys
+        def normalize_key(k: str) -> str:
+            # take last token after '+' (modifiers may appear as 'Ctrl+W')
+            k = k.split('+')[-1].strip().lower()
+            if k == 'space':
+                return 'space'
+            if k == '.':
+                return '.'
+            if k == ',':
+                return ','
+            # single letters
+            if len(k) == 1 and k.isalpha():
+                return k
+            # fallback: return lowercased token
+            return k
+
+        code_lines = []
+        if mode.lower() == 'path':
+            code_lines = ["# Generated Path from Recording", "from time import sleep", ""]
+            if not self.recorded_events:
+                code_lines.append('# No recorded actions')
+            else:
+                for key_name, duration in self.recorded_events:
+                    k = normalize_key(key_name)
+                    if k in ('w','a','s','d'):
+                        code_lines.append(f'self.keyboard.walk("{k}", {duration:.3f})')
+                    elif k in ('.',',','space'):
+                        # single press for non-movement keys
+                        # if duration is significant, use sleep instead
+                        if duration >= 0.05:
+                            code_lines.append(f'self.keyboard.press("{k}")')
+                            code_lines.append(f'sleep({duration:.3f})')
+                        else:
+                            code_lines.append(f'self.keyboard.press("{k}")')
+                    else:
+                        code_lines.append(f'# Recorded: {key_name} for {duration:.3f}s (unmapped)')
         else:
-            lines.append('Recorded Steps:')
-            for key_name, duration in self.recorded_events:
-                lines.append(f'- {key_name} for {duration:.3f}s')
-        self.creator_output.setPlainText('\n'.join(lines))
+            # Pattern generation uses size-scaled movements
+            code_lines = ["# Generated Pattern from Recording",
+                          "from time import sleep",
+                          "",
+                          "# Size conversion (auto-generated)",
+                          "if sizeword.lower() == \"xs\":",
+                          "    size = 0.5",
+                          "elif sizeword.lower() == \"s\":",
+                          "    size = 1",
+                          "elif sizeword.lower() == \"l\":",
+                          "    size = 2",
+                          "elif sizeword.lower() == \"xl\":",
+                          "    size = 2.5",
+                          "else:",
+                          "    size = 1.5",
+                          "",
+                          "# Pattern steps (use tcfbkey/tclrkey/afcfbkey/afclrkey variables from macro)"]
+            if not self.recorded_events:
+                code_lines.append('# No recorded actions')
+            else:
+                for key_name, duration in self.recorded_events:
+                    k = normalize_key(key_name)
+                    if k == 'w':
+                        code_lines.append(f'self.keyboard.walk(tcfbkey, {duration:.3f} * size)')
+                    elif k == 's':
+                        code_lines.append(f'self.keyboard.walk(afcfbkey, {duration:.3f} * size)')
+                    elif k == 'a':
+                        code_lines.append(f'self.keyboard.walk(tclrkey, {duration:.3f})')
+                    elif k == 'd':
+                        code_lines.append(f'self.keyboard.walk(afclrkey, {duration:.3f})')
+                    elif k in ('.',',','space'):
+                        code_lines.append(f'self.keyboard.press("{k}")')
+                        if duration >= 0.05:
+                            code_lines.append(f'sleep({duration:.3f})')
+                    else:
+                        code_lines.append(f'# Recorded: {key_name} for {duration:.3f}s (unmapped)')
+
+        self.creator_output.setPlainText('\n'.join(code_lines))
 
     def _get_app_instance(self):
         from PySide6.QtWidgets import QApplication
