@@ -203,6 +203,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel('Generated Path/Pattern Preview'))
         layout.addWidget(self.creator_output)
 
+        export_row = QHBoxLayout()
+        self.btn_export = QPushButton('Export...')
+        self.btn_export.clicked.connect(self.on_export)
+        export_row.addWidget(self.btn_export)
+        export_row.addStretch(1)
+        layout.addLayout(export_row)
+
         tab_widget.setLayout(layout)
 
     def _on_toggle_mode(self, button: QPushButton, checked: bool):
@@ -583,3 +590,48 @@ class MainWindow(QMainWindow):
             self.btn_emergency.setEnabled(False)
         except Exception as e:
             self.log.append('Emergency stop failed: ' + str(e))
+
+    def on_export(self):
+        try:
+            content = self.creator_output.toPlainText()
+            if not content or not content.strip():
+                QMessageBox.warning(self, 'Export', 'Nothing to export')
+                return
+            repo_root = Path(__file__).resolve().parents[4]
+            patterns_dir = repo_root / 'patterns'
+            paths_dir = repo_root / 'paths'
+            mode = self._get_mode_label(self.mode_toggle_creator).lower()
+            start_dir = patterns_dir if mode == 'pattern' else paths_dir
+            if not start_dir.exists():
+                try:
+                    start_dir.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    start_dir = repo_root
+
+            default_name = 'new_pattern.py' if mode == 'pattern' else 'new_path.py'
+            start = str(start_dir / default_name)
+            dlg = QFileDialog(self, 'Export to file', start)
+            dlg.setAcceptMode(QFileDialog.AcceptSave)
+            dlg.setNameFilter('Python files (*.py)')
+            if dlg.exec():
+                files = dlg.selectedFiles()
+                if files:
+                    fn = Path(files[0])
+                    if fn.suffix != '.py':
+                        fn = fn.with_suffix('.py')
+                    try:
+                        fn.parent.mkdir(parents=True, exist_ok=True)
+                        fn.write_text(content)
+                        QMessageBox.information(self, 'Export', f'Exported to {fn}')
+                        try:
+                            self.log.append(f'Exported {fn}')
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        QMessageBox.critical(self, 'Export Failed', str(e))
+                        try:
+                            self.log.append('Export failed: ' + str(e))
+                        except Exception:
+                            pass
+        except Exception as e:
+            QMessageBox.critical(self, 'Export', str(e))
