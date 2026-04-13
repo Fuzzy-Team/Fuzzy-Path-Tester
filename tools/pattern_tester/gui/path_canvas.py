@@ -12,18 +12,28 @@ class PathCanvas(QWidget):
         self._segments = []
         self._bounds = {}
         self._shift_lock = False
+        self._field_name = 'None'
+        self._start_position = 'center'
         self.setMinimumHeight(360)
 
     def set_events(self, events):
         self._events = list(events or [])
-        self._segments, self._bounds = trace_segments(self._events, shift_lock=self._shift_lock)
+        self._retrace()
         self.update()
 
     def set_shift_lock(self, enabled: bool):
         if self._shift_lock == bool(enabled):
             return
         self._shift_lock = bool(enabled)
-        self._segments, self._bounds = trace_segments(self._events, shift_lock=self._shift_lock)
+        self._retrace()
+        self.update()
+
+    def set_field_context(self, field_name: str, start_position: str):
+        if self._field_name == field_name and self._start_position == start_position:
+            return
+        self._field_name = field_name
+        self._start_position = start_position
+        self._retrace()
         self.update()
 
     def clear(self):
@@ -35,10 +45,13 @@ class PathCanvas(QWidget):
     def summary(self) -> str:
         if not self._segments:
             return 'No movement events'
+        field = self._bounds.get('field_name')
+        field_text = f", field={field}" if field else ""
         return (
             f"{len(self._segments)} moves, "
             f"{self._bounds.get('total_distance', 0.0):.2f} units, "
             f"end=({self._bounds.get('end_x', 0.0):.2f}, {self._bounds.get('end_y', 0.0):.2f})"
+            f"{field_text}"
         )
 
     def paintEvent(self, event):
@@ -46,6 +59,7 @@ class PathCanvas(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), QColor(18, 20, 22))
         self._draw_grid(painter)
+        self._draw_field(painter)
 
         if not self._segments:
             painter.setPen(QColor(195, 200, 205))
@@ -98,6 +112,23 @@ class PathCanvas(QWidget):
         painter.setPen(QPen(QColor(70, 76, 84), 1))
         painter.drawRect(rect)
 
+    def _draw_field(self, painter: QPainter):
+        polygon = self._bounds.get('field_polygon')
+        if not polygon:
+            return
+        points = [self._to_screen(x, y) for x, y in polygon]
+        painter.setPen(QPen(QColor(75, 114, 82), 2))
+        painter.setBrush(QColor(32, 82, 46, 95))
+        painter.drawPolygon(points)
+
+        start_x = self._bounds.get('start_x')
+        start_y = self._bounds.get('start_y')
+        if start_x is not None and start_y is not None:
+            start = self._to_screen(start_x, start_y)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(64, 202, 115))
+            painter.drawEllipse(start, 5, 5)
+
     def _draw_point_label(self, painter: QPainter, point: QPointF, label: int):
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(250, 191, 45))
@@ -110,12 +141,26 @@ class PathCanvas(QWidget):
         yaw = round(float(segment.get('yaw_degrees') or 0.0) / 45.0)
         return colors[yaw % len(colors)]
 
+    def _retrace(self):
+        self._segments, self._bounds = trace_segments(
+            self._events,
+            shift_lock=self._shift_lock,
+            field_name=self._field_name,
+            start_position=self._start_position,
+        )
+
     def _to_screen(self, x: float, y: float) -> QPointF:
         bounds = self._bounds or {}
-        min_x = bounds.get('min_x', 0.0)
-        max_x = bounds.get('max_x', 1.0)
-        min_y = bounds.get('min_y', 0.0)
-        max_y = bounds.get('max_y', 1.0)
+        if bounds.get('field_width') and bounds.get('field_height'):
+            min_x = 0.0
+            max_x = bounds.get('field_width', 1.0)
+            min_y = 0.0
+            max_y = bounds.get('field_height', 1.0)
+        else:
+            min_x = bounds.get('min_x', 0.0)
+            max_x = bounds.get('max_x', 1.0)
+            min_y = bounds.get('min_y', 0.0)
+            max_y = bounds.get('max_y', 1.0)
         span_x = max(max_x - min_x, 1.0)
         span_y = max(max_y - min_y, 1.0)
         pad = 42

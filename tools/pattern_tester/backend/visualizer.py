@@ -1,6 +1,10 @@
 """Visualizer helpers for pattern and path events."""
+from __future__ import annotations
+
 from typing import List, Tuple
 import math
+
+from .fields import FieldDefinition, get_field_definition
 
 
 def compute_timeline_bounds(events: List[object]) -> Tuple[float, float]:
@@ -75,15 +79,22 @@ def movement_vector(keys, yaw_degrees: float = 0.0) -> tuple[float, float]:
     return dx, dy
 
 
-def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list[dict], dict]:
+def trace_segments(
+    events: List[object],
+    shift_lock: bool = False,
+    field_name: str | None = None,
+    start_position: str | None = None,
+) -> tuple[list[dict], dict]:
     """Convert keyboard events to drawable path segments.
 
     Returns `(segments, bounds)`, where each segment contains start/end points,
     keys, timing, and event type. One unit roughly corresponds to one second of
     macro movement before the GUI scales it to the grid.
     """
-    x = 0.0
-    y = 0.0
+    field = get_field_definition(field_name)
+    start = _field_start(field, start_position)
+    x = start[0]
+    y = start[1]
     segments = []
     min_x = max_x = x
     min_y = max_y = y
@@ -103,14 +114,17 @@ def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list
         movement_yaw_degrees = relative_camera_yaw_degrees if shift_lock else 0.0
         dx, dy = movement_vector(keys, movement_yaw_degrees)
         segment_distance = duration if distance is None else max(0.0, float(distance or 0.0))
+        segment_distance_units = segment_distance
+        if field is not None:
+            segment_distance *= field.units_to_map
         if dx == 0.0 and dy == 0.0 or segment_distance <= 0.0:
             return
         start_x = x
         start_y = y
-        x += dx * segment_distance
-        y += dy * segment_distance
-        distance = ((x - start_x) ** 2 + (y - start_y) ** 2) ** 0.5
-        total_distance += distance
+        x, y = _move_with_field_bounds(field, x, y, dx * segment_distance, dy * segment_distance)
+        map_distance = ((x - start_x) ** 2 + (y - start_y) ** 2) ** 0.5
+        distance_units = map_distance / field.units_to_map if field is not None else map_distance
+        total_distance += distance_units
         movement_events += 1
         segments.append({
             'type': typ,
@@ -125,7 +139,9 @@ def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list
             'y1': start_y,
             'x2': x,
             'y2': y,
-            'distance': distance,
+            'distance': distance_units,
+            'attempted_distance': segment_distance_units,
+            'clamped': abs((start_x + dx * segment_distance) - x) > 1e-9 or abs((start_y + dy * segment_distance) - y) > 1e-9,
         })
         min_x = min(min_x, x)
         max_x = max(max_x, x)
@@ -185,4 +201,73 @@ def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list
         'end_x': x,
         'end_y': y,
     }
+    if field is not None:
+        bounds.update({
+            'field_name': field.name,
+            'field_width': field.width,
+            'field_height': field.height,
+            'field_polygon': field.polygon,
+            'start_position': start_position,
+            'start_x': start[0],
+            'start_y': start[1],
+        })
     return segments, bounds
+
+
+def _field_start(field: FieldDefinition | None, start_position: str | None) -> tuple[float, float]:
+    if field is None:
+        return (0.0, 0.0)
+    starts = field.start_positions
+    key = str(start_position or '').strip().lower()
+    if key in starts:
+        return starts[key]
+    if 'center' in starts:
+        return starts['center']
+    return next(iter(starts.values()))
+
+
+def _move_with_field_bounds(
+    field: FieldDefinition | None,
+    x: float,
+    y: float,
+    dx: float,
+    dy: float,
+) -> tuple[float, float]:
+    if field is None:
+        return x + dx, y + dy
+
+    distance = math.hypot(dx, dy)
+    steps = max(1, int(math.ceil(distance / 3.0)))
+    step_x = dx / steps
+    step_y = dy / steps
+    current_x = x
+    current_y = y
+
+    for _ in range(steps):
+        next_x = current_x + step_x
+        next_y = current_y + step_y
+        if _point_in_polygon(next_x, next_y, field.polygon):
+            current_x = next_x
+            current_y = next_y
+            continue
+        if _point_in_polygon(next_x, current_y, field.polygon):
+            current_x = next_x
+        if _point_in_polygon(current_x, next_y, field.polygon):
+            current_y = next_y
+
+    return current_x, current_y
+
+
+def _point_in_polygon(x: float, y: float, polygon: tuple[tuple[float, float], ...]) -> bool:
+    inside = False
+    j = len(polygon) - 1
+    for i, point in enumerate(polygon):
+        xi, yi = point
+        xj, yj = polygon[j]
+        crosses = (yi > y) != (yj > y)
+        if crosses:
+            intersect_x = (xj - xi) * (y - yi) / ((yj - yi) or 1e-12) + xi
+            if x <= intersect_x:
+                inside = not inside
+        j = i
+    return inside

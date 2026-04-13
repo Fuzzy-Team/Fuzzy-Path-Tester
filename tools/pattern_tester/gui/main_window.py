@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..backend.runner import Runner
+from ..backend.fields import FIELD_NAMES, start_positions_for_field
 from .path_canvas import PathCanvas
 from .timeline import TimelineWidget
 
@@ -144,6 +145,16 @@ class MainWindow(QMainWindow):
         self.chk_shift_lock = QCheckBox('Shift lock movement')
         self.chk_shift_lock.toggled.connect(self._on_shift_lock_changed)
         settings_layout.addRow('', self.chk_shift_lock)
+
+        self.field_combo = QComboBox()
+        self.field_combo.addItems(FIELD_NAMES)
+        self.field_combo.currentTextChanged.connect(self._on_field_changed)
+        settings_layout.addRow('Field', self.field_combo)
+
+        self.start_combo = QComboBox()
+        self.start_combo.currentTextChanged.connect(self._on_start_position_changed)
+        settings_layout.addRow('Start position', self.start_combo)
+        self._refresh_start_positions()
 
         self.turn_combo = QComboBox()
         self.turn_combo.addItems(['None', 'Left', 'Right'])
@@ -335,6 +346,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText('Ready')
         if hasattr(self, 'chk_shift_lock') and Path(self.path).stem.lower() == 'skillet':
             self.chk_shift_lock.setChecked(True)
+            if hasattr(self, 'field_combo'):
+                self.field_combo.setCurrentText('Pine Tree')
+                self.start_combo.setCurrentText('upper left')
         try:
             self.code_preview.setPlainText(Path(self.path).read_text(encoding='utf-8'))
         except Exception as exc:
@@ -379,10 +393,12 @@ class MainWindow(QMainWindow):
             f"width={self.width_spin.value()} movespeed={self.speed_spin.value()} "
             f"invert_lr={self.chk_invert_lr.isChecked()} invert_fb={self.chk_invert_fb.isChecked()} "
             f"shift_lock={self.chk_shift_lock.isChecked()} "
+            f"field={self.field_combo.currentText()} start={self.start_combo.currentText()} "
             f"turn={self.turn_combo.currentText()} turn_times={self.turn_times_spin.value()}"
             f"{' | LIVE' if live_mode else ''}"
         )
         self.path_canvas.set_shift_lock(self.chk_shift_lock.isChecked())
+        self._apply_field_context()
 
         try:
             self.runner.run_threaded(
@@ -445,6 +461,35 @@ class MainWindow(QMainWindow):
     def _on_shift_lock_changed(self, enabled: bool):
         if hasattr(self, 'path_canvas'):
             self.path_canvas.set_shift_lock(enabled)
+
+    def _on_field_changed(self, field_name: str):
+        self._refresh_start_positions()
+        self._apply_field_context()
+
+    def _on_start_position_changed(self, start_position: str):
+        self._apply_field_context()
+
+    def _refresh_start_positions(self):
+        if not hasattr(self, 'start_combo') or not hasattr(self, 'field_combo'):
+            return
+        previous = self.start_combo.currentText()
+        positions = start_positions_for_field(self.field_combo.currentText())
+        self.start_combo.blockSignals(True)
+        self.start_combo.clear()
+        self.start_combo.addItems(positions)
+        if previous in positions:
+            self.start_combo.setCurrentText(previous)
+        elif 'center' in positions:
+            self.start_combo.setCurrentText('center')
+        self.start_combo.blockSignals(False)
+
+    def _apply_field_context(self):
+        if not hasattr(self, 'path_canvas') or not hasattr(self, 'field_combo') or not hasattr(self, 'start_combo'):
+            return
+        self.path_canvas.set_field_context(
+            self.field_combo.currentText(),
+            self.start_combo.currentText(),
+        )
 
     def _append_event_log(self, event):
         end_str = f"{event.end:.3f}" if event.end is not None else "None"
