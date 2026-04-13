@@ -75,7 +75,7 @@ def movement_vector(keys, yaw_degrees: float = 0.0) -> tuple[float, float]:
     return dx, dy
 
 
-def trace_segments(events: List[object]) -> tuple[list[dict], dict]:
+def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list[dict], dict]:
     """Convert keyboard events to drawable path segments.
 
     Returns `(segments, bounds)`, where each segment contains start/end points,
@@ -89,14 +89,15 @@ def trace_segments(events: List[object]) -> tuple[list[dict], dict]:
     min_y = max_y = y
     total_distance = 0.0
     movement_events = 0
-    yaw_degrees = 0.0
+    camera_yaw_degrees = 0.0
 
     active_keys = {}
     last_time = 0.0
 
     def add_segment(keys, duration, typ, start_time, distance=None):
         nonlocal x, y, min_x, max_x, min_y, max_y, total_distance, movement_events
-        dx, dy = movement_vector(keys, yaw_degrees)
+        movement_yaw_degrees = camera_yaw_degrees if shift_lock else 0.0
+        dx, dy = movement_vector(keys, movement_yaw_degrees)
         segment_distance = duration if distance is None else max(0.0, float(distance or 0.0))
         if dx == 0.0 and dy == 0.0 or segment_distance <= 0.0:
             return
@@ -110,6 +111,8 @@ def trace_segments(events: List[object]) -> tuple[list[dict], dict]:
         segments.append({
             'type': typ,
             'keys': list(keys) if not isinstance(keys, str) else keys,
+            'yaw_degrees': movement_yaw_degrees,
+            'camera_yaw_degrees': camera_yaw_degrees,
             'start': start_time,
             'end': start_time + duration,
             'duration': duration,
@@ -149,9 +152,9 @@ def trace_segments(events: List[object]) -> tuple[list[dict], dict]:
             # Roblox camera rotation changes the movement frame, but the canvas
             # uses screen-style Y-down coordinates, so comma/period signs are inverted.
             if key == ',':
-                yaw_degrees -= 45.0
+                camera_yaw_degrees -= 45.0
             elif key == '.':
-                yaw_degrees += 45.0
+                camera_yaw_degrees += 45.0
             continue
 
         if typ not in ('walk_end', 'multiwalk_end'):

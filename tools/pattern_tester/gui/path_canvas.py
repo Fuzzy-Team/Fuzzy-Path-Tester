@@ -8,15 +8,26 @@ from ..backend.visualizer import trace_segments
 class PathCanvas(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._events = []
         self._segments = []
         self._bounds = {}
+        self._shift_lock = False
         self.setMinimumHeight(360)
 
     def set_events(self, events):
-        self._segments, self._bounds = trace_segments(list(events or []))
+        self._events = list(events or [])
+        self._segments, self._bounds = trace_segments(self._events, shift_lock=self._shift_lock)
+        self.update()
+
+    def set_shift_lock(self, enabled: bool):
+        if self._shift_lock == bool(enabled):
+            return
+        self._shift_lock = bool(enabled)
+        self._segments, self._bounds = trace_segments(self._events, shift_lock=self._shift_lock)
         self.update()
 
     def clear(self):
+        self._events = []
         self._segments = []
         self._bounds = {}
         self.update()
@@ -41,12 +52,19 @@ class PathCanvas(QWidget):
             painter.drawText(self.rect(), Qt.AlignCenter, 'Run a pattern or path to preview movement')
             return
 
-        path_pen = QPen(QColor(235, 63, 139), 3)
-        path_pen.setCapStyle(Qt.RoundCap)
-        path_pen.setJoinStyle(Qt.RoundJoin)
-        painter.setPen(path_pen)
+        path_colors = [
+            QColor(235, 63, 139),
+            QColor(82, 112, 255),
+            QColor(196, 65, 220),
+            QColor(220, 69, 69),
+            QColor(218, 204, 64),
+        ]
 
         for index, seg in enumerate(self._segments, start=1):
+            path_pen = QPen(self._segment_color(seg, path_colors), 3)
+            path_pen.setCapStyle(Qt.RoundCap)
+            path_pen.setJoinStyle(Qt.RoundJoin)
+            painter.setPen(path_pen)
             p1 = self._to_screen(seg['x1'], seg['y1'])
             p2 = self._to_screen(seg['x2'], seg['y2'])
             painter.drawLine(p1, p2)
@@ -87,6 +105,10 @@ class PathCanvas(QWidget):
         painter.setPen(QColor(230, 220, 120))
         painter.setFont(QFont('Monospace', 8))
         painter.drawText(point + QPointF(5, -5), str(label))
+
+    def _segment_color(self, segment: dict, colors: list[QColor]) -> QColor:
+        yaw = round(float(segment.get('yaw_degrees') or 0.0) / 45.0)
+        return colors[yaw % len(colors)]
 
     def _to_screen(self, x: float, y: float) -> QPointF:
         bounds = self._bounds or {}

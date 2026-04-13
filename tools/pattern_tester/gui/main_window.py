@@ -141,6 +141,10 @@ class MainWindow(QMainWindow):
         self.chk_invert_fb = QCheckBox('Invert forward/back')
         settings_layout.addRow('', self.chk_invert_fb)
 
+        self.chk_shift_lock = QCheckBox('Shift lock movement')
+        self.chk_shift_lock.toggled.connect(self._on_shift_lock_changed)
+        settings_layout.addRow('', self.chk_shift_lock)
+
         self.turn_combo = QComboBox()
         self.turn_combo.addItems(['None', 'Left', 'Right'])
         settings_layout.addRow('Turn', self.turn_combo)
@@ -329,6 +333,8 @@ class MainWindow(QMainWindow):
         self.path = str(Path(path).expanduser().resolve())
         self.file_label.setText(self.path)
         self.status_label.setText('Ready')
+        if hasattr(self, 'chk_shift_lock') and Path(self.path).stem.lower() == 'skillet':
+            self.chk_shift_lock.setChecked(True)
         try:
             self.code_preview.setPlainText(Path(self.path).read_text(encoding='utf-8'))
         except Exception as exc:
@@ -372,9 +378,11 @@ class MainWindow(QMainWindow):
             f"Running {self.path} | size={self.size_combo.currentText()} "
             f"width={self.width_spin.value()} movespeed={self.speed_spin.value()} "
             f"invert_lr={self.chk_invert_lr.isChecked()} invert_fb={self.chk_invert_fb.isChecked()} "
+            f"shift_lock={self.chk_shift_lock.isChecked()} "
             f"turn={self.turn_combo.currentText()} turn_times={self.turn_times_spin.value()}"
             f"{' | LIVE' if live_mode else ''}"
         )
+        self.path_canvas.set_shift_lock(self.chk_shift_lock.isChecked())
 
         try:
             self.runner.run_threaded(
@@ -433,6 +441,10 @@ class MainWindow(QMainWindow):
         self._append_event_log(event)
         self.timeline.set_events(self._live_events)
         self.path_canvas.set_events(self._live_events)
+
+    def _on_shift_lock_changed(self, enabled: bool):
+        if hasattr(self, 'path_canvas'):
+            self.path_canvas.set_shift_lock(enabled)
 
     def _append_event_log(self, event):
         end_str = f"{event.end:.3f}" if event.end is not None else "None"

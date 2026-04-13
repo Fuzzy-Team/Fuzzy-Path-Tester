@@ -180,7 +180,7 @@ class KeyboardStub:
         start = self._held_starts.pop(key, end)
         duration = max(0.0, end - start)
         self._record('key_up', key, end, end, meta={})
-        self._record('hold', key, start, end, meta={'duration': duration, 'distance': self._movement_distance(duration), 'movespeed': self.movespeed})
+        self._record('hold', key, start, end, meta={'duration': duration, 'distance': self._held_distance(duration), 'movespeed': self.movespeed})
         if self.live and self._controller is not None:
             try:
                 k = _map_key_for_pynput(key)
@@ -231,6 +231,9 @@ class KeyboardStub:
                 pass
 
     def _movement_distance(self, duration: float) -> float:
+        return max(0.0, float(duration or 0.0))
+
+    def _held_distance(self, duration: float) -> float:
         return max(0.0, float(duration or 0.0)) * (self.movespeed / self.BASE_MOVE_SPEED)
 
     def _tiles_to_duration(self, tiles) -> float:
