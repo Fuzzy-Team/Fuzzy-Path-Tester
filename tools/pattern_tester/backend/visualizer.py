@@ -90,13 +90,17 @@ def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list
     total_distance = 0.0
     movement_events = 0
     camera_yaw_degrees = 0.0
+    initial_camera_yaw_degrees = None
 
     active_keys = {}
     last_time = 0.0
 
     def add_segment(keys, duration, typ, start_time, distance=None):
-        nonlocal x, y, min_x, max_x, min_y, max_y, total_distance, movement_events
-        movement_yaw_degrees = camera_yaw_degrees if shift_lock else 0.0
+        nonlocal x, y, min_x, max_x, min_y, max_y, total_distance, movement_events, initial_camera_yaw_degrees
+        if initial_camera_yaw_degrees is None:
+            initial_camera_yaw_degrees = camera_yaw_degrees
+        relative_camera_yaw_degrees = camera_yaw_degrees - initial_camera_yaw_degrees
+        movement_yaw_degrees = relative_camera_yaw_degrees if shift_lock else 0.0
         dx, dy = movement_vector(keys, movement_yaw_degrees)
         segment_distance = duration if distance is None else max(0.0, float(distance or 0.0))
         if dx == 0.0 and dy == 0.0 or segment_distance <= 0.0:
@@ -112,7 +116,8 @@ def trace_segments(events: List[object], shift_lock: bool = False) -> tuple[list
             'type': typ,
             'keys': list(keys) if not isinstance(keys, str) else keys,
             'yaw_degrees': movement_yaw_degrees,
-            'camera_yaw_degrees': camera_yaw_degrees,
+            'camera_yaw_degrees': relative_camera_yaw_degrees,
+            'absolute_camera_yaw_degrees': camera_yaw_degrees,
             'start': start_time,
             'end': start_time + duration,
             'duration': duration,
