@@ -31,4 +31,13 @@ Purpose
 
 This tool runs pattern and path scripts from the repository in a safe simulated harness. It provides `self` and `keyboard` stubs and logs events so you can iterate on patterns without a live client.
 
-Note: Path files under `paths/` are intentionally excluded from the GUI for this MVP — the tester focuses on `patterns/` only. You can still run path scripts manually via the backend runner APIs or re-enable path support later.
+Tester features
+
+- Browse local tester patterns and paths from this repository, or open an external `.py` script manually.
+- Preview the selected script source before running it.
+- Run in fast simulated time with configurable size, width, move speed, and time scale.
+- Render a grid-based movement preview plus an event timeline and detailed event log while the script runs.
+- Simulate common macro APIs, including `walk`, `multiWalk`, `keyDown`, `keyUp`, `slowPress`, `tileWait`, `tileWalk`, `runPath`, `goToField`, `faceDirection`, and `time.sleep`.
+- Optional Live Mode can still send real keys after confirmation.
+
+The preview is a movement tester, not a Roblox physics engine. Screen/OCR/combat-only calls are stubbed where possible so path files can be inspected without driving the real client.

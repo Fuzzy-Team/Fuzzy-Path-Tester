@@ -3,19 +3,15 @@
 Provides simple run/pause/resume/step interfaces.
 """
 import threading
-import time
-from pathlib import Path
 from typing import Optional
 from .loader import prepare_namespace, safe_execute
-from .stubs import VicDetected
 
 
 class RunResult:
-    def __init__(self, success: bool, exception: Optional[Exception], selfstub, vic=None, time_controller=None):
+    def __init__(self, success: bool, exception: Optional[Exception], selfstub, time_controller=None):
         self.success = success
         self.exception = exception
         self.selfstub = selfstub
-        self.vic = vic
         self.time_controller = time_controller
 
 
@@ -27,25 +23,102 @@ class Runner:
         self._pause.set()
         self._current_run = None
 
-    def load_and_run(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, live_mode: bool = False):
-        ns, selfstub, vic, tc = prepare_namespace(script_path, sizeword, width, movespeed, time_scale, live_mode=live_mode)
+    def load_and_run(
+        self,
+        script_path: str,
+        sizeword='M',
+        width=4,
+        movespeed=18,
+        time_scale=1.0,
+        live_mode: bool = False,
+        event_callback=None,
+        invert_lr: bool = False,
+        invert_fb: bool = False,
+        turn: str = 'none',
+        turn_times: int = 1,
+    ):
+        ns, selfstub, tc = prepare_namespace(
+            script_path,
+            sizeword,
+            width,
+            movespeed,
+            time_scale,
+            live_mode=live_mode,
+            event_callback=event_callback,
+            invert_lr=invert_lr,
+            invert_fb=invert_fb,
+            turn=turn,
+            turn_times=turn_times,
+        )
+        result = RunResult(False, None, selfstub, time_controller=tc)
+        self._current_run = result
         exc = safe_execute(script_path, ns)
         if exc:
-            return RunResult(False, exc, selfstub, vic=vic, time_controller=tc)
-        return RunResult(True, None, selfstub, vic=vic, time_controller=tc)
+            result.exception = exc
+            return result
+        result.success = True
+        return result
 
     # blocking run (keeps previous behavior)
-    def run_blocking(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, live_mode: bool = False):
-        return self.load_and_run(script_path, sizeword, width, movespeed, time_scale, live_mode=live_mode)
+    def run_blocking(
+        self,
+        script_path: str,
+        sizeword='M',
+        width=4,
+        movespeed=18,
+        time_scale=1.0,
+        live_mode: bool = False,
+        invert_lr: bool = False,
+        invert_fb: bool = False,
+        turn: str = 'none',
+        turn_times: int = 1,
+    ):
+        return self.load_and_run(
+            script_path,
+            sizeword,
+            width,
+            movespeed,
+            time_scale,
+            live_mode=live_mode,
+            invert_lr=invert_lr,
+            invert_fb=invert_fb,
+            turn=turn,
+            turn_times=turn_times,
+        )
 
-    def run_threaded(self, script_path: str, sizeword='M', width=4, movespeed=18, time_scale=1.0, callback=None, live_mode: bool = False):
+    def run_threaded(
+        self,
+        script_path: str,
+        sizeword='M',
+        width=4,
+        movespeed=18,
+        time_scale=1.0,
+        callback=None,
+        live_mode: bool = False,
+        event_callback=None,
+        invert_lr: bool = False,
+        invert_fb: bool = False,
+        turn: str = 'none',
+        turn_times: int = 1,
+    ):
         """Run the script in a background thread. If provided, call `callback(result)` when finished."""
         if self._thread and self._thread.is_alive():
             raise RuntimeError('Runner is already running')
 
         def _target():
-            result = self.load_and_run(script_path, sizeword, width, movespeed, time_scale, live_mode=live_mode)
-            self._current_run = result
+            result = self.load_and_run(
+                script_path,
+                sizeword,
+                width,
+                movespeed,
+                time_scale,
+                live_mode=live_mode,
+                event_callback=event_callback,
+                invert_lr=invert_lr,
+                invert_fb=invert_fb,
+                turn=turn,
+                turn_times=turn_times,
+            )
             if callback:
                 try:
                     callback(result)
@@ -79,18 +152,6 @@ class Runner:
             except Exception:
                 return False
         return False
-
-    def manual_trigger_vic(self):
-        if self._current_run and self._current_run.vic:
-            self._current_run.vic.manual_trigger()
-
-    def schedule_vic(self, seconds: float):
-        """Schedule a vic detection `seconds` from now for the current run."""
-        if not (self._current_run and self._current_run.vic):
-            raise RuntimeError('No running job with vic detector available')
-        # use vic detector's method which expects absolute time internally
-        self._current_run.vic.schedule_trigger_after(seconds)
-        return True
 
     def get_last_result(self):
         return getattr(self, '_current_run', None)
