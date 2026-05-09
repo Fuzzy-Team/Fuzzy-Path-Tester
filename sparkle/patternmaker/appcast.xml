@@ -4,6 +4,14 @@
         <title>Fuzzy Pattern Maker</title>
         <item>
             <title>0.1.1</title>
+            <pubDate>Sat, 09 May 2026 00:52:05 -0500</pubDate>
+            <sparkle:version>1778305922</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.1/Fuzzy-Pattern-Maker-0.1.1.zip" length="6824835" type="application/octet-stream" sparkle:edSignature="z3i8G4CPXOUpl0abQEshyxfoFiabmnYDRSFiecLMyrEYquV7Y3DR5WuZZPL4dUabTYyvZApKjqpsRTiyg4BrCg=="/>
+        </item>
+        <item>
+            <title>0.1.1</title>
             <pubDate>Sat, 09 May 2026 00:45:04 -0500</pubDate>
             <sparkle:version>1778305501</sparkle:version>
             <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
@@ -17,14 +25,6 @@
             <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.1/Fuzzy-Pattern-Maker-0.1.0.zip" length="6817556" type="application/octet-stream"/>
-        </item>
-        <item>
-            <title>0.1.0</title>
-            <pubDate>Fri, 08 May 2026 23:56:47 -0500</pubDate>
-            <sparkle:version>1778302604</sparkle:version>
-            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.0/Fuzzy-Pattern-Maker-0.1.0.zip" length="5717918" type="application/octet-stream"/>
         </item>
     </channel>
 </rss>
