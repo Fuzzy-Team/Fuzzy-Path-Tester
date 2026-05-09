@@ -3,28 +3,12 @@
     <channel>
         <title>Fuzzy Pattern Maker</title>
         <item>
-            <title>0.1.1</title>
-            <pubDate>Sat, 09 May 2026 00:52:05 -0500</pubDate>
-            <sparkle:version>1778305922</sparkle:version>
-            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.1/Fuzzy-Pattern-Maker-0.1.1.zip" length="6824835" type="application/octet-stream" sparkle:edSignature="z3i8G4CPXOUpl0abQEshyxfoFiabmnYDRSFiecLMyrEYquV7Y3DR5WuZZPL4dUabTYyvZApKjqpsRTiyg4BrCg=="/>
-        </item>
-        <item>
-            <title>0.1.1</title>
-            <pubDate>Sat, 09 May 2026 00:45:04 -0500</pubDate>
-            <sparkle:version>1778305501</sparkle:version>
-            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.1/Fuzzy-Pattern-Maker-0.1.1.zip" length="6885795" type="application/octet-stream"/>
-        </item>
-        <item>
             <title>0.1.0</title>
-            <pubDate>Sat, 09 May 2026 00:00:39 -0500</pubDate>
-            <sparkle:version>1778302835</sparkle:version>
+            <pubDate>Sat, 09 May 2026 02:30:46 -0500</pubDate>
+            <sparkle:version>1778311843</sparkle:version>
             <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.1/Fuzzy-Pattern-Maker-0.1.0.zip" length="6817556" type="application/octet-stream"/>
+            <enclosure url="https://github.com/Fuzzy-Team/Fuzzy-Pattern-Maker/releases/download/0.1.0/Fuzzy-Pattern-Maker-0.1.0.zip" length="6963859" type="application/octet-stream" sparkle:edSignature="prldb5eo93BTZ531zGpPXQrwI5GfCJM18aFLfJM/95tPlYZHAtoByU1/IqWNEJ9m+MIhweQPOxKxAw78VmtjCQ=="/>
         </item>
     </channel>
 </rss>
